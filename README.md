@@ -80,9 +80,14 @@ php tools/push-packages.php --server 3 --apply
 Stated plainly, because a module that quietly does nothing is worse than one
 that says it cannot.
 
-* **No single sign on.** The panel mints no one time session, so there is no
-  "log in to your panel" button. Every hosted domain answers `/dashmox` with a
-  redirect to the sign in page, so your customer can still get there.
+* **No single sign on yet.** The panel mints one time sign on links as of
+  0.99.30 and the client under `lib/` can ask for one, but no button in the
+  client area calls it: the handoff lands in your customer's browser, and that
+  is worth shipping only once it has been driven by a real WHMCS. The
+  [FOSSBilling manager](https://github.com/Dashmox-Software/fossbilling-server-manager)
+  has it today, built on the same client. Meanwhile every hosted domain answers
+  `/dashmox` with a redirect to the sign in page, so your customer can still get
+  there.
 * **No bandwidth in the usage update.** Transfer is measured by the panel and
   can be read, but what a usage update should send when a plan is priced on both
   disk and transfer is a decision about how you sell. Disk is measured, kept
