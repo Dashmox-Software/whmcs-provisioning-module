@@ -30,7 +30,10 @@ certificate expires.
   in the panel under **Server**, then **Integrations**.
 
 Grant the key these permissions: `customers.manage`, `sites.create`,
-`sites.view`, `sites.edit`, `sites.delete`, `server.view`. It reaches only the
+`sites.view`, `sites.edit`, `sites.delete`, `server.view`, `users.manage`.
+
+`users.manage` is only for the sign on button below, and without it the button
+lands on the panel's own sign in page instead. It reaches only the
 routes that name a permission it holds, so nothing else is open to it whatever
 else you tick.
 
@@ -75,19 +78,28 @@ php tools/push-packages.php --server 3
 php tools/push-packages.php --server 3 --apply
 ```
 
+## Signing your customer in
+
+A website sold through WHMCS has no password anybody knows. The panel customer
+is created by the integration key and nothing ever sets one on it, and neither
+does the website's own account, so the link this module used to offer led to a
+sign in page where your customer had no credentials. The button carries no
+password either: it carries a one time link the panel mints when the button is
+pressed, good for ninety seconds and spent the moment it is opened.
+
+It is WHMCS's own single sign on, so WHMCS does the redirecting. The button
+lives in the hosting summary this module draws on the service page, which means
+both **Show hosting summary** and **Show a sign on button** have to be on.
+
+It needs a panel on **0.99.30 or newer** and a key holding `users.manage`.
+Without either, the button lands on the panel's sign in page instead, which is
+where the old link went.
+
 ## What it does not do
 
 Stated plainly, because a module that quietly does nothing is worse than one
 that says it cannot.
 
-* **No single sign on yet.** The panel mints one time sign on links as of
-  0.99.30 and the client under `lib/` can ask for one, but no button in the
-  client area calls it: the handoff lands in your customer's browser, and that
-  is worth shipping only once it has been driven by a real WHMCS. The
-  [FOSSBilling manager](https://github.com/Dashmox-Software/fossbilling-server-manager)
-  has it today, built on the same client. Meanwhile every hosted domain answers
-  `/dashmox` with a redirect to the sign in page, so your customer can still get
-  there.
 * **No bandwidth in the usage update.** Transfer is measured by the panel and
   can be read, but what a usage update should send when a plan is priced on both
   disk and transfer is a decision about how you sell. Disk is measured, kept

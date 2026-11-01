@@ -1,8 +1,13 @@
-{* What the customer sees about their hosting, and nothing they can press.
+{* What the customer sees about their hosting, and the one thing they can press.
 
-   Read-only by decision, 2026-09-23: every change stays in the panel so it is
-   built once. What this earns is the trip not taken: disk is fine, the
+   Read-only otherwise, by decision, 2026-09-23: every change stays in the panel
+   so it is built once. What this earns is the trip not taken: disk is fine, the
    certificate renews next month, nothing to do.
+
+   The button links to WHMCS's own single sign-on trigger rather than to a
+   sign-on link itself. The link the panel mints lives ninety seconds and is
+   spent when opened, so one rendered into this page would be dead before
+   anybody read the page.
 
    Every figure can be absent on its own without taking the page with it. A
    panel that is unreachable, a website it has forgotten and a number never
@@ -69,12 +74,12 @@
         </tr>
       </tbody>
     </table>
-    {if $panel}
+    {if $sso}
       <div class="panel-footer">
-        <a href="{$panel|escape}" target="_blank" rel="noopener" class="btn btn-default btn-sm">
-          Open the hosting panel
+        <a href="{$sso|escape}" class="btn btn-default btn-sm">
+          Open my control panel
         </a>
-        <span class="text-muted"> Sign in with your panel password.</span>
+        <span class="text-muted"> No password to remember: the panel is asked for a one time link when you press it.</span>
       </div>
     {/if}
   </div>

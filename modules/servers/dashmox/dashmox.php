@@ -42,7 +42,7 @@ function dashmox_MetaData()
         'RequiresServer' => true,
         'DefaultNonSSLPort' => '8443',
         'DefaultSSLPort' => '8443',
-        'ServiceSingleSignOnLabel' => '',
+        'ServiceSingleSignOnLabel' => 'Open my control panel',
     ];
 }
 
@@ -92,11 +92,12 @@ function dashmox_ConfigOptions()
                 . 'change is still made in the panel.',
         ],
         'client_panel_link' => [
-            'FriendlyName' => 'Show a link to the panel',
+            'FriendlyName' => 'Show a sign on button',
             'Type' => 'yesno',
             'Default' => 'on',
-            'Description' => 'Show the customer a link to the panel sign-in page. It is a plain '
-                . 'link, not a sign-on: they enter their own panel password. Turn it off if your '
+            'Description' => 'Show the customer a button that signs them into the panel. It asks '
+                . 'the panel for a one time link when the button is pressed, and lands them on '
+                . 'the panel sign-in page instead when no link can be had. Turn it off if your '
                 . 'customers should only ever deal with you.',
         ],
     ];
@@ -117,6 +118,23 @@ function dashmox_panel(array $params)
     $token = trim($params['serveraccesshash']);
 
     return new Panel(new Client($scheme . '://' . $host . ':' . $port, $token, (bool) $params['serversecure']));
+}
+
+/**
+ * The panel's own sign-in page.
+ *
+ * Where a sign-on link cannot be minted this is still a better answer than an
+ * error: the customer at least arrives at the right door. It follows the
+ * server's own Secure setting rather than assuming https, because that setting
+ * is what every other request to this panel already obeys.
+ */
+function dashmox_panelAddress(array $params)
+{
+    $host = $params['serverhostname'] !== '' ? $params['serverhostname'] : $params['serverip'];
+    $scheme = $params['serversecure'] ? 'https' : 'http';
+    $port = !empty($params['serverport']) ? (int) $params['serverport'] : 8443;
+
+    return $scheme . '://' . $host . ':' . $port . '/';
 }
 
 /**
@@ -559,6 +577,56 @@ function dashmox_getField($productId, $serviceId, $name)
 }
 
 /**
+ * Sign the customer into their panel.
+ *
+ * **This is the only way most customers can get in.** The panel customer is
+ * created by the integration key with no password, and so is the website's own
+ * account, so the "open the hosting panel" link this module used to offer led
+ * to a sign-in page where the customer had no credentials to type. The panel
+ * mints a one-time link instead: ninety seconds, spent the moment it is
+ * opened, and good for that one website.
+ *
+ * WHMCS calls this when a customer reaches
+ * clientarea.php?action=productdetails&id=<service>&dosinglesignon=1, which is
+ * what the button in the template points at. WHMCS does the redirecting; this
+ * returns where to.
+ *
+ * The three refusals a caller can do nothing about fall back to the panel's
+ * sign-in page rather than reporting a failure: an older panel, a key the
+ * operator did not give users.manage, and a website still being built. That is
+ * where the button went before, so the worst case here is the old behaviour.
+ */
+function dashmox_ServiceSingleSignOn(array $params)
+{
+    $plain = dashmox_panelAddress($params);
+    $ids = dashmox_recall((int) $params['pid'], $params['serviceid']);
+    if (empty($ids['site_id'])) {
+        return ['success' => true, 'redirectTo' => $plain];
+    }
+
+    try {
+        // Written into the panel's audit log as the claim it is: the panel
+        // cannot check it. An operator asking who went in gets an answer
+        // better than "the billing system".
+        $who = 'WHMCS, service ' . (int) $params['serviceid'];
+        if (!empty($params['clientsdetails']['userid'])) {
+            // Read off clientsdetails rather than the top level, because
+            // clientsdetails is the one this module already relies on and has
+            // been seen to be there. A client id it does not have is left out
+            // rather than written down as nought.
+            $who .= ', client ' . (int) $params['clientsdetails']['userid'];
+        }
+        $url = dashmox_panel($params)->signOn($ids['site_id'], $who);
+    } catch (ApiError $e) {
+        return ['success' => false, 'errorMsg' => dashmox_explain($e)];
+    } catch (Exception $e) {
+        return ['success' => false, 'errorMsg' => 'The panel could not be reached just now.'];
+    }
+
+    return ['success' => true, 'redirectTo' => $url ? $url : $plain];
+}
+
+/**
  * What the customer sees on their service page.
  *
  * Read-only, deliberately. The operator settled on 2026-09-23 that this shows
@@ -567,6 +635,9 @@ function dashmox_getField($productId, $serviceId, $name)
  * step for ever. What this has to earn is the trip not taken: a customer who
  * can see that their disk is fine and their certificate renews next month has
  * no reason to open anything.
+ *
+ * The one thing on it to press changes nothing either: the sign-on button
+ * opens the panel, which is still where every change is made.
  *
  * It degrades rather than fails. A panel that cannot be reached, a website the
  * panel has forgotten, a figure never measured: each is its own sentence, and
@@ -586,11 +657,15 @@ function dashmox_ClientArea(array $params)
         ];
     }
 
-    $vars = ['problem' => '', 'site' => null, 'panel' => '', 'sslDays' => null];
+    $vars = ['problem' => '', 'site' => null, 'sso' => '', 'sslDays' => null];
     if (!empty($params['configoption6']) && $params['configoption6'] === 'on') {
-        $host = $params['serverhostname'] !== '' ? $params['serverhostname'] : $params['serverip'];
-        $port = !empty($params['serverport']) ? (int) $params['serverport'] : 8443;
-        $vars['panel'] = 'https://' . $host . ':' . $port . '/';
+        // WHMCS draws nothing for single sign-on by itself: its own
+        // documentation says the link belongs in the sidebar or in the module's
+        // client area output, and this is the module's client area output. The
+        // address is WHMCS's own trigger, which calls the function above and
+        // then redirects to whatever it returns.
+        $vars['sso'] = 'clientarea.php?action=productdetails&id='
+            . (int) $params['serviceid'] . '&dosinglesignon=1';
     }
 
     try {
